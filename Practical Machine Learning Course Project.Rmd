@@ -1,0 +1,131 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Tze Yen Wong"
+date: "09/10/2020"
+output: html_document
+---
+
+## Overview
+This report looks at devices such as Jawbone Up, Nike FuelBand, and Fitbit to predict the manner in which user did the exercise. A group of enthusiasts take measurements about themselves regularly to improve their health, to find patterns in their behaviour and to quantify how much of a particular activity they do. In this report, we use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants which they perform barbell lifts correctly and incorrectly in 5 different ways. To predict, the "classe" variable in the training set should be use along with other variables.
+
+
+## Dataset
+The data from the report come from:  
+http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har.
+
+The training data:  
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data:  
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+## Loading packages
+Loading packages needed for the analysis:
+```{r, echo=TRUE}
+library(caret)
+library(rattle)
+library(rpart)
+set.seed(807)
+```
+
+## Loading and Cleaning Data
+Loading data:
+```{r, echo=TRUE}
+train_data <- read.csv('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv')
+validation <- read.csv('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv')
+```
+
+We partition the training data into 2 to create training (70%) and testing (30%) part.
+```{r, echo=TRUE}
+inTrain <- createDataPartition(train_data$classe, p=0.7, list=FALSE)
+training <- train_data[inTrain,]
+testing <- train_data[-inTrain,]
+dim(training)
+dim(testing)
+```
+
+Since the data may contain a lot of NA values and variables, we need to remove them before running analysis.
+```{r, echo=TRUE}
+# remove nearly zero variance variables
+nearzero <- nearZeroVar(training)
+training <- training[, -nearzero]
+testing <- testing[,-nearzero]
+dim(training)
+dim(testing)
+
+# remove mostly NA variables
+var_NA <- sapply(training, function(x) mean(is.na(x)))
+training <- training[, var_NA==FALSE]
+testing <- testing[, var_NA==FALSE]
+dim(training)
+dim(testing)
+
+# remove identification variables
+training <- training[, -(1:5)]
+testing <- testing[, -(1:5)]
+dim(training)
+dim(testing)
+```
+
+## Prediction Model Building 
+For this project, we use 3 different model algorithm to predict and see which gives the highest accuracy. These include:   
+1. Decision tree  
+2. Generalized boosted model  
+3. Random Forest  
+
+### 1. Decision tree
+```{r, echo=TRUE}
+# Decision tree model fit
+modFit_DT <- train(classe ~., method="rpart", data=training)
+fancyRpartPlot(modFit_DT$finalModel)
+```
+
+### 2. Generalized boosted model
+```{r, echo=TRUE}
+# GBM model fit
+control <- trainControl(method="repeatedcv", number=5, repeats=1)
+modFit_GBM <- train(classe ~., method="gbm",data=training, trControl=control, verbose=FALSE)
+modFit_GBM$finalModel
+```
+
+### 3. Random Forest 
+```{r, echo=TRUE}
+# Random forest model fit
+modFit_RF <- train(classe ~., method="rf",data=training, trControl=trainControl(method="cv", 5), ntree=100)
+modFit_RF$finalModel
+```
+
+
+## Model Assessment (Sample error)
+```{r, echo=TRUE}
+# Prediction on test data (Decision Tree)
+predict_DT <- predict(modFit_DT, newdata=testing)
+confm_DT <- confusionMatrix(factor(predict_DT), factor(testing$classe))
+confm_DT
+
+# Prediction on test data (GBM)
+predict_GBM <- predict(modFit_GBM, newdata=testing)
+confm_GBM <- confusionMatrix(factor(predict_GBM), factor(testing$classe))
+confm_GBM
+
+# Prediction on test data (Random Forest)
+predict_RF <- predict(modFit_RF, newdata=testing)
+confm_RF <- confusionMatrix(factor(predict_RF), factor(testing$classe))
+confm_RF
+```
+
+## Applying the Selected Model to the Test Data
+From the analysis above, we see that the accuracy of the 3 regression modeling methods are:  
+  
+1. Decision Tree: 0.4953  
+2. GBM: 0.9842  
+3. Random Forest: 0.9986  
+  
+Therefore, the random forest model will be applied to predict the 20 
+quiz results. 
+```{r, echo=TRUE}
+predict_validation <- predict(modFit_RF, newdata=validation)
+predict_validation
+```
+
